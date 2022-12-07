@@ -11,7 +11,6 @@ import com.hunorkovacs.koauth.domain._
 
 object Arithmetics {
 
-  private val HmacSha1Algorithm = "HmacSHA1"
   private val FirstSlash = "(?<!/)/(?!/)"
   private val Base64Encoder = Base64.getEncoder
 
@@ -98,10 +97,10 @@ object Arithmetics {
     else Right(TokenResponse(entries(TokenName), entries(TokenSecretName)))
   }
 
-  def sign(base: String, consumerSecret: String, tokenSecret: String): String = {
+  def sign(base: String, consumerSecret: String, tokenSecret: String, algorithm: String = HmacSha1.algorithmName): String = {
     val key = List(consumerSecret, tokenSecret) map urlEncode mkString "&"
-    val secretkeySpec = new SecretKeySpec(key.getBytes(UTF_8), HmacSha1Algorithm)
-    val mac = Mac.getInstance(HmacSha1Algorithm)
+    val secretkeySpec = new SecretKeySpec(key.getBytes(UTF_8), algorithm)
+    val mac = Mac.getInstance(algorithm)
     mac.init(secretkeySpec)
     val bytesToSign = base.getBytes(UTF_8)
     val digest = mac.doFinal(bytesToSign)

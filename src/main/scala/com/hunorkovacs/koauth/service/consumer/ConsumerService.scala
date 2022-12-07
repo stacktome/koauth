@@ -4,6 +4,7 @@ import com.hunorkovacs.koauth.domain.KoauthRequest
 import com.hunorkovacs.koauth.domain.OauthParams._
 import com.hunorkovacs.koauth.service.Arithmetics.{concatItemsForSignature, createAuthorizationHeader, sign}
 import com.hunorkovacs.koauth.service.DefaultTokenGenerator.generateNonce
+import com.hunorkovacs.koauth.service.{HmacSha1, SignatureMethod}
 
 case class RequestWithInfo(request: KoauthRequest, signatureBase: String, header: String)
 
@@ -12,22 +13,25 @@ trait ConsumerService {
   def createRequestTokenRequest(request: KoauthRequest,
                                 consumerKey: String,
                                 consumerSecret: String,
-                                callback: String): RequestWithInfo
+                                callback: String,
+                                signatureMethod: SignatureMethod = HmacSha1): RequestWithInfo
 
   def createAccessTokenRequest(request: KoauthRequest,
                                consumerKey: String,
                                consumerSecret: String,
                                requestToken: String,
                                requestTokenSecret: String,
-                               verifier: String): RequestWithInfo
+                               verifier: String,
+                               signatureMethod: SignatureMethod = HmacSha1): RequestWithInfo
 
   def createOauthenticatedRequest(request: KoauthRequest,
                                   consumerKey: String,
                                   consumerSecret: String,
                                   requestToken: String,
-                                  requestTokenSecret: String): RequestWithInfo
+                                  requestTokenSecret: String,
+                                  signatureMethod: SignatureMethod = HmacSha1): RequestWithInfo
 
-  def createGeneralSignedRequest(request: KoauthRequest): RequestWithInfo
+  def createGeneralSignedRequest(request: KoauthRequest, algorithm: String = HmacSha1.algorithmName): RequestWithInfo
 }
 
 object DefaultConsumerService extends ConsumerService {
@@ -37,12 +41,15 @@ object DefaultConsumerService extends ConsumerService {
   def createRequestTokenRequest(request: KoauthRequest,
                                 consumerKey: String,
                                 consumerSecret: String,
-                                callback: String): RequestWithInfo = {
+                                callback: String,
+                                signatureMethod: SignatureMethod = HmacSha1): RequestWithInfo = {
     createGeneralSignedRequest(
       KoauthRequest(request, ConsumerKeyName -> consumerKey
         :: ConsumerSecretName -> consumerSecret
         :: CallbackName -> callback
-        :: basicParamList())
+        :: SignatureMethodName -> signatureMethod.oauthSignatureMethodName
+        :: basicParamList()),
+      signatureMethod.algorithmName
     )
   }
 
@@ -51,15 +58,17 @@ object DefaultConsumerService extends ConsumerService {
                                consumerSecret: String,
                                requestToken: String,
                                requestTokenSecret: String,
-                               verifier: String): RequestWithInfo = {
+                               verifier: String,
+                               signatureMethod: SignatureMethod = HmacSha1): RequestWithInfo = {
     createGeneralSignedRequest(
       KoauthRequest(request, ConsumerKeyName -> consumerKey
         :: ConsumerSecretName -> consumerSecret
         :: TokenName -> requestToken
         :: TokenSecretName -> requestTokenSecret
         :: VerifierName -> verifier
-        :: basicParamList()
-      )
+        :: SignatureMethodName -> signatureMethod.oauthSignatureMethodName
+        :: basicParamList()),
+      signatureMethod.algorithmName
     )
   }
 
@@ -67,21 +76,24 @@ object DefaultConsumerService extends ConsumerService {
                                   consumerKey: String,
                                   consumerSecret: String,
                                   requestToken: String,
-                                  requestTokenSecret: String): RequestWithInfo = {
+                                  requestTokenSecret: String,
+                                  signatureMethod: SignatureMethod = HmacSha1): RequestWithInfo = {
     createGeneralSignedRequest(
       KoauthRequest(request, ConsumerKeyName -> consumerKey
         :: ConsumerSecretName -> consumerSecret
         :: TokenName -> requestToken
         :: TokenSecretName -> requestTokenSecret
-        :: basicParamList())
+        :: SignatureMethodName -> signatureMethod.oauthSignatureMethodName
+        :: basicParamList()),
+      signatureMethod.algorithmName
     )
   }
 
-  def createGeneralSignedRequest(request: KoauthRequest): RequestWithInfo = {
+  def createGeneralSignedRequest(request: KoauthRequest, algorithm: String = HmacSha1.algorithmName): RequestWithInfo = {
     val consumerSecret = request.oauthParamsMap.applyOrElse(ConsumerSecretName, (s: String) => "")
     val tokenSecret = request.oauthParamsMap.applyOrElse(TokenSecretName, (s: String) => "")
     val base = createSignatureBase(request)
-    val header = createAuthorizationHeader(SignatureName -> sign(base, consumerSecret, tokenSecret)
+    val header = createAuthorizationHeader(SignatureName -> sign(base, consumerSecret, tokenSecret, algorithm)
       :: request.oauthParamsList.filterNot(p => secretNames(p._1)))
     RequestWithInfo(request, base, header)
   }
@@ -96,7 +108,6 @@ object DefaultConsumerService extends ConsumerService {
   private def basicParamList() = List(
     NonceName -> generateNonce,
     VersionName -> "1.0",
-    SignatureMethodName -> "HMAC-SHA1",
     TimestampName -> (System.currentTimeMillis() / 1000).toString
   )
 }

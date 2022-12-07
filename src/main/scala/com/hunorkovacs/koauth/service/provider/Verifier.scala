@@ -135,9 +135,9 @@ protected class CustomVerifier(private val persistence: Persistence,
 
   def verifyAlgorithm(request: KoauthRequest): Verification = {
     val signatureMethod = request.oauthParamsMap(SignatureMethodName)
-    if (HmacReadable != signatureMethod) {
+    if (!HmacReadables.contains(signatureMethod)) {
       logger.debug("Unsupported Signature Method. Given: {}; Required: {}. Request id: {}",
-        signatureMethod, HmacReadable, request.id)
+        signatureMethod, HmacReadables, request.id)
       VerificationUnsupported(MessageUnsupportedMethod)
     }
     else VerificationOk
@@ -157,7 +157,7 @@ protected class CustomVerifier(private val persistence: Persistence,
 
 protected object VerifierObject {
 
-  val HmacReadable = "HMAC-SHA1"
+  val HmacReadables = Seq("HMAC-SHA1", "HMAC-SHA256")
   val TimePrecisionSeconds = 10 * 60
 
   final val RequestTokenRequiredParams = List[String](ConsumerKeyName, SignatureMethodName, SignatureName,
